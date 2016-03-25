@@ -20,7 +20,7 @@ To perform data  analysis code below downloads , checks if CSV data available in
 #Libraries required 
 require(ggplot2)
 require(dplyr)
-
+require(knitr)
 
 # Source data  is not available in work directory.
 if (!file.exists("weather.csv.bz2")) {
@@ -49,10 +49,8 @@ str(weather)
 ### Data extract and preparation 
 From source data we extract weather events with summary of total events by type and how harmful those events for population (both injuries and fatalities).
 
-```{r population}
-require(ggplot2)
-require(dplyr)
-require(knitr)
+```{r population, message=FALSE}
+
 events<-group_by(weather,EVTYPE) %>% summarize(total.injures=sum(INJURIES+FATALITIES),occurs=n()) 
 byharm<-events[head(order(events$total.injures,decreasing = TRUE),10),]
 bycount<-events[head(order(events$occurs,decreasing = TRUE),10),]
