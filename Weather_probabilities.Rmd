@@ -8,7 +8,7 @@ output: html_document
 ## Summary
  Document contains exploratory analyze of National Weather Service Storm database. Study provides data in format suitable for decision makers and give on weather phenomena probability and consequences for people and property. As a summary of the summary: _tornado_ is the most harmful event for people, while _TODO there_ bring the highest property damage.
 
-## Data preparation and enreachment
+## Data processing
 I have used NOAA Storm database data, which will be transformed for visualization and understanding convenience
 
 ### Data load
@@ -17,11 +17,6 @@ I have used NOAA Storm database data, which will be transformed for visualizatio
 To perform data  analysis code below downloads , checks if CSV data available in work directory and loads source into _weather_ data frame. Code below performs all necessary steps to prepare original data.
 
 ```{r dataload, echo=TRUE, message=FALSE, cache=TRUE} 
-#Libraries required 
-require(ggplot2)
-require(dplyr)
-require(knitr)
-
 # Source data  is not available in work directory.
 if (!file.exists("weather.csv.bz2")) {
   message("Downloading data.") 
@@ -46,18 +41,53 @@ Variables are described by [code book](https://d396qusza40orc.cloudfront.net/rep
 str(weather)
 ```
 
-### Data extract and preparation 
+### Data preparation
 From source data we extract weather events with summary of total events by type and how harmful those events for population (both injuries and fatalities).
 
 ```{r population, message=FALSE}
+require(knitr)
+require(dplyr)
 
 events<-group_by(weather,EVTYPE) %>% summarize(total.injures=sum(INJURIES+FATALITIES),occurs=n()) 
 byharm<-events[head(order(events$total.injures,decreasing = TRUE),10),]
 bycount<-events[head(order(events$occurs,decreasing = TRUE),10),]
 ```
+
+To analyze property and crops damage original data  should be normolized. Weather data contains four variables: __PROPDMG, PROPDMGEXP,CROPDMG, CROPDMGEXP__ where field PROPDMGEXP and CROPDMGEXP contains exponent of the coresponding variable. Values are alphanumeric, so I have to normalize exponetns as well. There is no proper description so I decoded valuse out of common sence. Let's check exponent values for bot variables.
+```{r expvalues}
+ unique(weather$PROPDMGEXP)
+ unique(weather$CROPDMGEXP)
+ 
+``` 
+Exponentsa for crops damage are subset for property damage values, so I used it to decode expontns. You may see results in Table 2.  I'm going to ignore values with exponents "+", "-", and "?". There are __`r length(grep("[+-?]",weather$CROPDMGEXP)) + length(grep("[+-?]",weather$PROPDMGEXP))`__ measurements with such exponents and it is __`r round((length(grep("[+-?]",weather$CROPDMGEXP)) + length(grep("[+-?]",weather$PROPDMGEXP))) / nrow(weather)*100,4)`%__ from the the whole weather dataset.
+
+
+```{r exponents}
+  require(knitr)
+# Table of  of exponents 
+exponents<-as.data.frame(cbind(DMGEXP=sort(unique(toupper(weather$PROPDMGEXP))),
+exp.value=c(1,0,0,0,1,1,100,1000,10000,100000,1000000,10000000,100000000,1000000000,100,1000,1000000)))
+
+ kable(exponents,caption = "Table 2. Exponent values conversion")
+```
+Now we are ready to select and transform data for property damage analysis.
+```{r propdamage}
+   require(dplyr)
+
+# Property and crops damages
+pdamage<-select(weather, EVTYPE,contains("ropdmg")) %>% mutate(PROPDMGEXP=toupper(PROPDMGEXP),CROPDMGEXP=toupper(CROPDMGEXP))
+# Merge weather data and exponents 
+pdamage<-merge(merge(pdamage,exponents,by.x = "PROPDMGEXP",by.y = "DMGEXP"),exponents,by.x = "CROPDMGEXP",by.y = "DMGEXP")
+# Produce property and crops damage figures and sumarize by weatger events 
+events<-mutate(pdamage, dmg.props = PROPDMG * as.integer(exp.value.x),dmg.crops = CROPDMG * as.integer(exp.value.y)) %>% select(EVTYPE,dmg.props,dmg.crops) %>%  group_by(EVTYPE) %>% summarize(prod.total=sum(dmg.props),crop.total=sum(dmg.crops),total=sum(dmg.props+dmg.crops)) %>% left_join(events,by="EVTYPE")
+
+ 
+```
 ## Threats for population
 Diagram shows top 10 most danjerous weather  for people life and health. Color reflectsoccurances  weather occurs for  for observation period.
-```{r popgraph, dpi=120,fig.width=7,fig.height=7}
+```{r popgraph, dpi=100,fig.width=7,fig.height=7}
+require(ggplot2)
+
 fills <- factor(findInterval(byharm$occurs,quantile(byharm$occurs,c(0,.5,1))),labels=c("rare","occasional","often"))
 names(fills)<-
 g<-ggplot(data=byharm,aes(x = EVTYPE,y=total.injures,fill=fills))
@@ -69,8 +99,11 @@ g<-g+theme(plot.title = element_text(lineheight=.9, face="bold"),
 print(g)
 ```
 
+
 As you may see tornados are the most hazardous phenomena while it's not the most common event type. Alnog with top ten events by damage we selected top 10 most often weather events. The inttersection of those two sets are in Table 1. 
+
 ```{r evtable, }
+require(knitr)
 bycount<-events[head(order(events$occurs,decreasing = TRUE),10),]
 topinjures <- dplyr::intersect(bycount,byharm)
 kable(topinjures,col.names = c("Event type","Injured","Total events"),caption = "Table 1. The most harmful and common weather events.")

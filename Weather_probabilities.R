@@ -37,6 +37,22 @@ events<-group_by(weather,EVTYPE) %>% summarize(total.injures=sum(INJURIES+FATALI
 byharm<-events[head(order(events$total.injures,decreasing = TRUE),10),]
 bycount<-events[head(order(events$occurs,decreasing = TRUE),10),]
 
+#Exponents fro properties and crops
+unique(weather$PROPDMGEXP)
+unique(weather$CROPDMGEXP)
+
+# Variables with unclear exponents
+length(grep("[+-?]",weather$CROPDMGEXP)) + length(grep("[+-?]",weather$PROPDMGEXP))
+round((length(grep("[+-?]",weather$CROPDMGEXP)) + length(grep("[+-?]",weather$PROPDMGEXP))) / nrow(weather)*100,4)
+
+# Property and crops damages
+pdamage<-select(weather, EVTYPE,contains("ropdmg")) %>% mutate(PROPDMGEXP=toupper(PROPDMGEXP),CROPDMGEXP=toupper(CROPDMGEXP))
+# Table of  of exponents
+exponents<-as.data.frame(cbind(exp.name=c("1st","Skip","Skip","Skip","1st","1st","2nd","3rd","4th","5th","6th","7th","8th","Billion","Hundred","Thousand","Million"),
+                                DMGEXP=sort(unique(toupper(weather$PROPDMGEXP))),
+                               exp.value=c(1,0,0,0,1,1,100,1000,10000,100000,1000000,10000000,100000000,1000000000,100,1000,1000000)
+                         ))
+
 
 # Plot 1
 fills <- factor(findInterval(byharm$occurs,quantile(byharm$occurs,c(0,.5,1))),labels=c("rare","occasional","often"))
